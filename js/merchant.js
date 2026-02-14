@@ -29,54 +29,69 @@ function tryParseToken(text) {
 }
 
 const qr = new Html5Qrcode("reader");
-
 const config = { fps: 10, qrbox: 220 };
 
-Html5Qrcode.getCameras().then(cameras => {
-    if (!cameras || cameras.length === 0) {
-        showBox(false, "Nincs kamera", { error: "A böngésző nem lát kamerát." });
+let cameraId = null;
+let inFlight = false;
+let scanning = false;
+
+const rescanBtn = document.getElementById("rescanBtn");
+rescanBtn.onclick = () => startScan();
+
+async function startScan() {
+  if (scanning) return;
+
+  rescanBtn.disabled = true;
+  inFlight = false;
+
+  try {
+    if (!cameraId) {
+      const cameras = await Html5Qrcode.getCameras();
+      if (!cameras || cameras.length === 0) {
+        showBox(false, "Nincs kamera", {});
         return;
+      }
+      cameraId = cameras[0].id;
     }
 
-    // első kamerát próbáljuk (telefonon általában működik)
-    const cameraId = cameras[0].id;
-    // hátsó kamera telefonon
-    // const cameraId = cameras[1].id;
+    await qr.start(cameraId, config, onScanSuccess, () => {});
+    scanning = true;
 
-    qr.start(
-        cameraId,
-        config,
-        async (decodedText) => {
-            const tokenObj = tryParseToken(decodedText);
-            
-            if (!tokenObj ||
-                typeof tokenObj.tokenId !== "string" ||
-                typeof tokenObj.iat !== "number" ||
-                typeof tokenObj.exp !== "number" ||
-                typeof tokenObj.sig !== "string") {
-                    showBox(false, "Nem aláírt token QR", { decodedText });
-                    return;
-            }
-            
-            try {
-                const serverRes = await checkOnServer(tokenObj);
-                const ok = serverRes.valid === true;
-                showBox(
-                    ok,
-                    ok ? "ELFOGADVA (szerver)" : "ELUTASÍTVA (TTL/SIG/REVOKE)",
-                    {
-                        scanned: tokenObj,
-                        server: serverRes
-                    }
-                );
-                // hogy ne pörögjön folyamatosan:
-                await qr.stop();
-            } catch (err) {
-                showBox(false, "Szerver hiba", { error: String(err) });
-            }
-        },
-        (err) => { /* scan error spamet nem írunk ki */ }
-    );    
-}).catch(err => {
-    showBox(false, "Kamera hiba", { error: String(err) });
-});
+  } catch (err) {
+    showBox(false, "Start hiba", { error: String(err) });
+  }
+}
+
+async function stopScan() {
+  if (!scanning) return;
+  scanning = false;
+  await qr.stop().catch(() => {});
+  rescanBtn.disabled = false;
+}
+
+async function onScanSuccess(decodedText) {
+  if (inFlight) return;
+  inFlight = true;
+
+  try {
+    const tokenObj = tryParseToken(decodedText);
+    if (!tokenObj) {
+      showBox(false, "Nem token", { decodedText });
+      inFlight = false; // engedjük tovább scannelni
+      return;
+    }
+
+    const serverRes = await checkOnServer(tokenObj);
+    const ok = serverRes.valid === true;
+
+    showBox(ok, ok ? "ELFOGADVA" : "ELUTASÍTVA", serverRes);
+
+  } catch (err) {
+    showBox(false, "Szerver hiba", { error: String(err) });
+  } finally {
+    await stopScan();   // <-- itt áll meg
+  }
+}
+
+// első indulás
+startScan();
