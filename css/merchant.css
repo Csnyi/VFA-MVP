@@ -1,0 +1,25 @@
+body {
+    font-family: Arial;
+    padding: 16px;
+}
+
+#reader {
+    width: 320px;
+    max-width: 100%;
+}
+
+.ok {
+    padding: 10px;
+    background: #dff7df;
+    margin-top: 12px;
+}
+
+.bad {
+    padding: 10px;
+    background: #ffd6d6;
+    margin-top: 12px;
+}
+
+pre {
+    white-space: pre-wrap;
+}

@@ -1,0 +1,19 @@
+body {
+    font-family: Arial;
+    padding: 20px;
+}
+
+button {
+    padding: 10px;
+    margin: 5px;
+}
+
+.token {
+    border: 1px solid #ccc;
+    padding: 10px;
+    margin: 5px 0;
+}
+
+.revoked {
+    background: #ffd6d6;
+}
