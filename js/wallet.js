@@ -4,7 +4,7 @@ const TTL_MS = 5 * 60 * 1000; // 5 perc
 
 // FONTOS: MVP-hez jó, de ne commitold publikus repóba.
 // Egyezzen a szerver WALLET_HMAC_SECRET-jével!
-const HMAC_SECRET = "valami_hosszabb_titok_legalabb_32_karakter";
+const HMAC_SECRET = "456erh45-7894-er45-98hj-456rtz45g895";
 
 function b64urlFromBytes(bytes) {
     let binary = "";
@@ -122,6 +122,8 @@ async function render() {
         const exp = t.exp;
         const message = `${t.id}.${iat}.${exp}`;
         const sig = await hmacSign(message);
+        console.log("MSG(client):", message);
+        console.log("SIG(client):", sig.slice(0, 24));
 
         const payload = {
             v: 1,
