@@ -1,185 +1,168 @@
-// js/merchant.js
-// Merchant oldal: QR beolvasás → /check ellenőrzés → megáll → "Új beolvasás" gombbal újraindítható.
+// js/merchant.js (MVP)
+// - Create handshake request -> show as QR (wallet scans)
+// - Scan/paste visaToken from wallet -> verify via server
+//
+// Requires (recommended): QRious (same as you use in wallet.js)
+// <script src="qrious.min.js"></script>
+// <script src="js/merchant.js"></script>
+//
+// Minimal HTML ids this script expects:
+// - requestCanvas (canvas)   : shows merchant request QR
+// - requestJson  (textarea)  : shows the JSON that is encoded in QR (debug/copy)
+// - btnNewRequest (button)   : create new request
+// - visaInput (textarea/input): paste scanned visaToken ???
+// - btnVerify (button)       : verify visaToken
+// - merchantView (div)       : status/output
 
-const API_BASE = "http://localhost:5000";
+const API_BASE = "http://localhost:5000"; // change if needed
 
-async function checkOnServer(payload) {
-  const r = await fetch(`${API_BASE}/check`, {
+// --- Config (MVP) ---
+const MERCHANT_ID = "lidl_001"; // set per merchant
+const DEFAULT_SCOPE = ["age_over_18", "loyalty_id"]; // what you ask from the wallet
+const DEFAULT_TTL_SEC = 60; // request lifetime
+
+function $(id) { return document.getElementById(id); }
+function esc(x) {
+  return String(x)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function setStatus(html) {
+  const v = $("merchantView");
+  if (v) v.innerHTML = html;
+}
+
+async function apiHandshakeRequest({ merchantId, scope, ttlSec }) {
+  const res = await fetch(`${API_BASE}/handshake/request`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
+    body: JSON.stringify({ merchantId, scope, ttlSec }),
   });
-
-  // Ha a szerver nem 2xx-et ad, akkor is legyen értelmes hiba
-  if (!r.ok) {
-    const txt = await r.text().catch(() => "");
-    throw new Error(`HTTP ${r.status} ${r.statusText}${txt ? " - " + txt : ""}`);
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok || !body.ok) {
+    throw new Error(body?.error || `HTTP_${res.status}`);
   }
-
-  return await r.json();
+  return body; // { ok, requestId, expMs, qrPayload }
 }
 
-// Később Revocation cache-hez kellhet
-function loadTokens() {
-  return JSON.parse(localStorage.getItem("tokens") || "[]");
-}
-
-function showBox(ok, title, obj) {
-  const el = document.getElementById("result");
-  el.className = ok ? "ok" : "bad";
-  el.innerHTML = `<b>${title}</b><pre>${JSON.stringify(obj, null, 2)}</pre>`;
-}
-
-function tryParseToken(text) {
-  try {
-    return JSON.parse(text);
-  } catch {
-    return null;
+async function apiHandshakeVerify(visaToken) {
+  const res = await fetch(`${API_BASE}/handshake/verify`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ visaToken }),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok || !body.ok) {
+    throw new Error(body?.error || `HTTP_${res.status}`);
   }
+  return body; // { ok, valid, payload }
 }
 
-function isSignedTokenShape(tokenObj) {
-  // Minimális forma-ellenőrzés (az igazi validálás a szerveren történik)
-  return !!tokenObj &&
-    typeof tokenObj.tokenId === "string" &&
-    typeof tokenObj.iat === "number" &&
-    typeof tokenObj.exp === "number" &&
-    typeof tokenObj.sig === "string";
-}
+function renderRequestQr(qrPayload) {
+  const canvas = $("requestCanvas");
+  const txt = $("requestJson");
 
-// --- Html5Qrcode setup ---
-const qr = new Html5Qrcode("reader");
-const config = { fps: 10, qrbox: 220 };
+  const json = JSON.stringify(qrPayload);
 
-// Állapotok
-let cameraId = null;
-let scanning = false;     // ténylegesen fut-e a scanner
-let inFlight = false;     // épp ellenőrzünk-e (hogy ne legyen több POST)
-let lastText = null;      // duplázás ellen (ugyanaz a QR több frame-ben)
-let lastAt = 0;
+  if (txt) txt.value = json;
 
-// UI
-const rescanBtn = document.getElementById("rescanBtn");
-if (rescanBtn) {
-  rescanBtn.disabled = true; // induláskor úgyis scannelünk
-  rescanBtn.addEventListener("click", () => startScan(), { passive: true });
-}
-
-function ignoreDuplicate(decodedText, windowMs = 1500) {
-  const now = Date.now();
-  if (decodedText === lastText && (now - lastAt) < windowMs) return true;
-  lastText = decodedText;
-  lastAt = now;
-  return false;
-}
-
-async function ensureCameraId() {
-  if (cameraId) return cameraId;
-
-  const cameras = await Html5Qrcode.getCameras();
-  if (!cameras || cameras.length === 0) {
-    throw new Error("A böngésző nem lát kamerát.");
-  }
-
-  // 1. kamera (telefonon gyakran működik); ha kell, cseréld a 2. kamerára
-  cameraId = cameras[0].id;
-  return cameraId;
-}
-
-async function startScan() {
-  if (scanning) return;
-
-  // UI/állapot reset
-  if (rescanBtn) rescanBtn.disabled = true;
-  inFlight = false;
-  lastText = null;
-  lastAt = 0;
-
-  try {
-    const camId = await ensureCameraId();
-
-    // start előtt jelöljük "scanning" true-ra, hogy azonnal blokkolja a duplázást
-    // (ha a callback gyorsan tüzel)
-    scanning = true;
-
-    await qr.start(
-      camId,
-      config,
-      onScanSuccess,
-      () => {
-        // scan error spamet nem írunk ki
-      }
-    );
-  } catch (err) {
-    scanning = false;
-    if (rescanBtn) rescanBtn.disabled = false;
-    showBox(false, "Start hiba", { error: String(err) });
-  }
-}
-
-async function stopScan() {
-  // Idempotens stop: ha már nem fut, akkor se omoljon össze
-  if (!scanning) {
-    if (rescanBtn) rescanBtn.disabled = false;
+  if (!canvas) return;
+  if (typeof QRious === "undefined") {
+    console.warn("QRious not loaded; request JSON:", json);
     return;
   }
 
-  scanning = false;
-
-  // Html5Qrcode stop néha dob, ha már áll -> elnyeljük
-  await qr.stop().catch(() => {});
-
-  if (rescanBtn) rescanBtn.disabled = false;
+  new QRious({
+    element: canvas,
+    value: json,
+    size: 180,
+    background: "#ffffff",
+    foreground: "#000000",
+  });
 }
 
-async function onScanSuccess(decodedText) {
-  // 1) Ha már megálltunk / fut a kérés -> ignore
-  if (!scanning) return;
-  if (inFlight) return;
-
-  // 2) Ugyanaz a QR több frame-ben -> ignore
-  if (ignoreDuplicate(decodedText)) return;
-
-  // 3) Lockolunk, hogy csak 1 POST legyen
-  inFlight = true;
-
+async function newRequest() {
   try {
-    const tokenObj = tryParseToken(decodedText);
+    setStatus(`<div class="card"><p>Request készül…</p></div>`);
 
-    if (!isSignedTokenShape(tokenObj)) {
-      showBox(false, "Nem aláírt token QR", { decodedText });
-      // Érvénytelen QR esetén engedjük tovább scannelni
-      inFlight = false;
-      return;
-    }
+    const resp = await apiHandshakeRequest({
+      merchantId: MERCHANT_ID,
+      scope: DEFAULT_SCOPE,
+      ttlSec: DEFAULT_TTL_SEC,
+    });
 
-    // Ellenőrzés a szerveren
-    const serverRes = await checkOnServer(tokenObj);
-    const ok = serverRes?.valid === true;
+    renderRequestQr(resp.qrPayload);
 
-    showBox(
-      ok,
-      ok ? "ELFOGADVA (szerver)" : "ELUTASÍTVA (TTL/SIG/REVOKE)",
-      {
-        scanned: tokenObj,
-        server: serverRes,
-      }
-    );
-
-    // Sikeres (vagy sikertelen, de értelmezhető) ellenőrzés után megállunk,
-    // és a felhasználó a gombbal indíthat újra.
-    await stopScan();
-  } catch (err) {
-    // Ha szerver hiba volt, itt is megállhatunk, hogy látszódjon az üzenet,
-    // és a "Új beolvasás" gombbal újra próbálható.
-    showBox(false, "Szerver hiba", { error: String(err) });
-    await stopScan();
-  } finally {
-    // Ha stopScan nem futott le valamiért, inFlight akkor se maradjon örökre true.
-    // Ha scanning true maradt (pl. invalid QR-nél), akkor engedjük a következő próbát.
-    if (scanning) inFlight = false;
+    setStatus(`
+      <div class="card">
+        <h2>Merchant (Handshake MVP)</h2>
+        <p><b>Merchant:</b> ${esc(MERCHANT_ID)}</p>
+        <p><b>RequestId:</b> <code>${esc(resp.requestId)}</code></p>
+        <p><b>Lejár:</b> ${new Date(resp.expMs).toLocaleString()}</p>
+        <p>Mutasd a QR-t a walletnek beolvasásra.</p>
+      </div>
+    `);
+  } catch (e) {
+    setStatus(`
+      <div class="card">
+        <h2>Merchant (Handshake MVP)</h2>
+        <p style="color:#b00"><b>Hiba:</b> ${esc(e.message)}</p>
+      </div>
+    `);
   }
 }
 
-// első indulás
-startScan();
+async function verifyVisa() {
+  const inp = $("visaInput");
+  const visaToken = String(inp?.value || "").trim();
+
+  if (!visaToken) {
+    setStatus(`<div class="card"><p style="color:#b00"><b>Hiba:</b> visaToken üres</p></div>`);
+    return;
+  }
+
+  try {
+    setStatus(`<div class="card"><p>Ellenőrzés…</p></div>`);
+    const resp = await apiHandshakeVerify(visaToken);
+
+    const p = resp.payload || {};
+    setStatus(`
+      <div class="card">
+        <h2>Visa OK ✅</h2>
+        <p><b>MerchantId:</b> ${esc(p.merchantId || "")}</p>
+        <p><b>VisaId:</b> <code>${esc(p.visaId || "")}</code></p>
+        <p><b>RequestId:</b> <code>${esc(p.requestId || "")}</code></p>
+        <p><b>ScopeHash:</b> <code>${esc(p.scopeHash || "")}</code></p>
+        <p><b>IAT:</b> ${esc(String(p.iat || ""))}</p>
+        <p><b>EXP:</b> ${esc(String(p.exp || ""))} (${new Date(Number(p.exp || 0)).toLocaleString()})</p>
+      </div>
+    `);
+  } catch (e) {
+    setStatus(`
+      <div class="card">
+        <h2>Visa HIBÁS ❌</h2>
+        <p style="color:#b00"><b>Ok:</b> ${esc(e.message)}</p>
+      </div>
+    `);
+  }
+}
+
+// Optional: if you have a scanner that calls a global callback with scanned text:
+window.onVisaTokenScanned = (text) => {
+  const inp = $("visaInput");
+  if (inp) inp.value = String(text || "").trim();
+  verifyVisa().catch(console.warn);
+};
+
+window.addEventListener("DOMContentLoaded", () => {
+  // Wire buttons if present
+  $("btnNewRequest")?.addEventListener("click", () => newRequest());
+  $("btnVerify")?.addEventListener("click", () => verifyVisa());
+
+  // Auto-create a request on load (nice for demos)
+  newRequest().catch(console.warn);
+});

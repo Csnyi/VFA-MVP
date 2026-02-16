@@ -1,148 +1,218 @@
 // js/wallet.js
-const API_BASE = "http://localhost:5000";
-const TTL_MS = 5 * 60 * 1000; // 5 perc
+const API_BASE = "http://localhost:5000"; // állítsd be ha nem localhost
 
-// FONTOS: MVP-hez jó, de ne commitold publikus repóba.
-// Egyezzen a szerver WALLET_HMAC_SECRET-jével!
-const HMAC_SECRET = "456erh45-7894-er45-98hj-456rtz45g895";
+// -------------------------
+// Minimal DOM helpers
+// -------------------------
+function $(id) { return document.getElementById(id); }
+function esc(x) {
+  return String(x)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+function nowMs() { return Date.now(); }
 
-function b64urlFromBytes(bytes) {
-    let binary = "";
-    const len = bytes.byteLength;
-    for (let i = 0; i < len; i++) binary += String.fromCharCode(bytes[i]);
-    const b64 = btoa(binary);
-    return b64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+// -------------------------
+// QR payload parsing (JSON / base64url JSON)
+// -------------------------
+function b64urlToUtf8(b64url) {
+  const pad = "=".repeat((4 - (b64url.length % 4)) % 4);
+  const b64 = (b64url + pad).replace(/-/g, "+").replace(/_/g, "/");
+  const bin = atob(b64);
+  const bytes = new Uint8Array([...bin].map(c => c.charCodeAt(0)));
+  return new TextDecoder("utf-8").decode(bytes);
 }
 
-async function hmacSign(message) {
-    const enc = new TextEncoder();
-    const keyData = enc.encode(HMAC_SECRET);
-    const key = await crypto.subtle.importKey(
-        "raw",
-        keyData,
-        { name: "HMAC", hash: "SHA-256" },
-        false,
-        ["sign"]
-    );
-    const sig = await crypto.subtle.sign("HMAC", key, enc.encode(message));
-    return b64urlFromBytes(new Uint8Array(sig));
-}
+function parseMerchantRequest(rawText) {
+  const s = String(rawText || "").trim();
+  if (!s) throw new Error("empty_scan");
 
-async function apiRegisterToken(t) {
-    try {
-        await fetch(`${API_BASE}/token`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ tokenId: t.id, createdMs: t.created, expMs: t.exp })
-        });
-    } catch (e) {
-        console.warn("Szerver nem elérhető (register):", e);
+  // 1) direct JSON
+  if (s.startsWith("{") && s.endsWith("}")) {
+    const obj = JSON.parse(s);
+    return obj;
+  }
+
+  // 2) base64url(JSON) – ha később így kódolod QR-be
+  if (/^[A-Za-z0-9\-_]+$/.test(s)) {
+    const jsonText = b64urlToUtf8(s);
+    if (jsonText.startsWith("{") && jsonText.endsWith("}")) {
+      return JSON.parse(jsonText);
     }
+  }
+
+  throw new Error("unsupported_qr_format");
 }
 
-async function apiRevokeToken(tokenId) {
-    try {
-        await fetch(`${API_BASE}/revoke`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ tokenId })
-        });
-    } catch (e) {
-        console.warn("Szerver nem elérhető (revoke):", e);
+// -------------------------
+// API calls
+// -------------------------
+async function apiHandshakeAccept(requestId, decision) {
+  const res = await fetch(`${API_BASE}/handshake/accept`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ requestId, decision })
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok || !body.ok) {
+    const msg = body?.error || `HTTP_${res.status}`;
+    throw new Error(msg);
+  }
+  return body;
+}
+
+// -------------------------
+// State
+// -------------------------
+let currentReq = null;     // merchant request payload
+let currentVisaToken = ""; // returned from server
+
+// -------------------------
+// UI
+// -------------------------
+function render() {
+  const view = $("walletView");
+  if (!view) return;
+
+  if (!currentReq) {
+    view.innerHTML = `
+      <div class="card">
+        <h2>Wallet (Handshake MVP)</h2>
+        <p>Olvasd be / illeszd be a merchant request QR tartalmát.</p>
+      </div>
+    `;
+    return;
+  }
+
+  const expMs = Number(currentReq.expMs || 0);
+  const secLeft = Math.max(0, Math.floor((expMs - nowMs()) / 1000));
+  const scopeList = Array.isArray(currentReq.scope) ? currentReq.scope : [];
+
+  view.innerHTML = `
+    <div class="card">
+      <h2>Kézfogás kérés</h2>
+      <p><b>Merchant:</b> ${esc(currentReq.merchantId || "")}</p>
+      <p><b>RequestId:</b> <code>${esc(currentReq.requestId || "")}</code></p>
+      <p><b>Lejárat:</b> ${esc(String(expMs))} <small>(${secLeft}s)</small></p>
+
+      <p><b>Kért adatszint (scope):</b></p>
+      <ul>${scopeList.map(x => `<li>${esc(x)}</li>`).join("")}</ul>
+
+      <div style="display:flex; gap:8px; margin-top:12px;">
+        <button id="btnAccept">Elfogadom</button>
+        <button id="btnReject">Elutasítom</button>
+      </div>
+
+      <p id="hsMsg" style="margin-top:12px;"></p>
+    </div>
+  `;
+
+  $("btnAccept").onclick = () => decide("ACCEPT");
+  $("btnReject").onclick = () => decide("REJECT");
+}
+
+async function decide(decision) {
+  const msgEl = $("hsMsg");
+  if (!currentReq?.requestId) {
+    if (msgEl) msgEl.textContent = "Hiányzik a requestId.";
+    return;
+  }
+
+  try {
+    if (msgEl) msgEl.textContent = "Küldés a szervernek…";
+    const resp = await apiHandshakeAccept(currentReq.requestId, decision);
+
+    if (decision === "REJECT") {
+      currentVisaToken = "";
+      if (msgEl) msgEl.textContent = "Elutasítva.";
+      clearVisaQr();
+      return;
     }
+
+    currentVisaToken = resp.visaToken || "";
+    if (msgEl) msgEl.textContent = "Elfogadva. Visa token elkészült.";
+    renderVisaQr(currentVisaToken);
+
+  } catch (e) {
+    if (msgEl) msgEl.textContent = `Hiba: ${e.message}`;
+    clearVisaQr();
+  }
 }
 
-// eleje
-function loadTokens() {
-    return JSON.parse(localStorage.getItem("tokens") || "[]");
+function clearVisaQr() {
+  const c = $("visaCanvas");
+  if (!c) return;
+  const ctx = c.getContext("2d");
+  ctx.clearRect(0, 0, c.width, c.height);
 }
 
-function saveTokens(tokens) {
-    localStorage.setItem("tokens", JSON.stringify(tokens));
+function renderVisaQr(visaToken) {
+  const c = $("visaCanvas");
+  if (!c) return;
+
+  // QRious legyen betöltve (mint nálad eddig)
+  if (typeof QRious === "undefined") {
+    console.warn("QRious nincs betöltve, visaToken kiírás:", visaToken);
+    return;
+  }
+
+  new QRious({
+    element: c,
+    value: visaToken, // ezt fogja merchant beolvasni
+    size: 180,
+    background: "#ffffff",
+    foreground: "#000000"
+  });
 }
 
-function uuid() {
-    return crypto.randomUUID();
-}
+// -------------------------
+// Scan handling (paste/scan)
+// -------------------------
+function onScan(rawText) {
+  try {
+    const obj = parseMerchantRequest(rawText);
 
-async function createToken() {
-    const tokens = loadTokens();
+    // Gyors validáció (a szerver /handshake/request qrPayload formátuma)
+    if (obj.t !== "vfa_hs_req") throw new Error("not_handshake_request");
+    if (!obj.requestId || !obj.merchantId) throw new Error("missing_fields");
 
-    const created = Date.now();
-    const exp = created + TTL_MS;
-
-    const token = {
-        id: uuid(),
-        created,
-        exp,
-        revoked: false
-    };
-
-    tokens.push(token);
-    saveTokens(tokens);
-
-    await apiRegisterToken(token);
+    currentReq = obj;
+    currentVisaToken = "";
+    clearVisaQr();
     render();
-}
-
-async function revokeToken(id) {
-    const tokens = loadTokens();
-    const t = tokens.find(x => x.id === id);
-    if (t) t.revoked = true;
-    saveTokens(tokens);
-
-    await apiRevokeToken(id);
-    render();
-}
-
-async function render() {
-    const list = document.getElementById("tokenList");
-    const tokens = loadTokens();
-
-    list.innerHTML = "";
-
-    for (const t of tokens) {
-        const div = document.createElement("div");
-        div.className = "token " + (t.revoked ? "revoked" : "");
-
-        const canvasId = "qr_" + t.id;
-
-        div.innerHTML = `
-        <b>ID:</b> ${t.id}<br>
-        <b>Állapot:</b> ${t.revoked ? "VISSZAVONVA" : "AKTÍV"}<br>
-        <b>Lejár:</b> ${new Date(t.exp).toLocaleString()}<br>
-        ${!t.revoked ? `<button onclick="revokeToken('${t.id}')">Visszavon</button>` : ""}
-        <br>
-        <canvas id="${canvasId}"></canvas>
+  } catch (e) {
+    const view = $("walletView");
+    if (view) {
+      view.innerHTML = `
+        <div class="card">
+          <h2>Wallet (Handshake MVP)</h2>
+          <p style="color:#b00"><b>Scan hiba:</b> ${esc(e.message)}</p>
+          <p>Ellenőrizd, hogy a merchant QR a <code>/handshake/request</code> <code>qrPayload</code>-ja.</p>
+        </div>
       `;
-
-        list.appendChild(div);
-
-        const iat = t.created;
-        const exp = t.exp;
-        const message = `${t.id}.${iat}.${exp}`;
-        const sig = await hmacSign(message);
-        console.log("MSG(client):", message);
-        console.log("SIG(client):", sig.slice(0, 24));
-
-        const payload = {
-            v: 1,
-            tokenId: t.id,
-            iat,
-            exp,
-            sig
-        };
-
-        new QRious({
-            element: document.getElementById(canvasId),
-            value: JSON.stringify(payload),
-            size: 140,
-            background: "#ffffff",
-            foreground: "#000000"
-        });
     }
+    currentReq = null;
+    currentVisaToken = "";
+    clearVisaQr();
+  }
 }
 
+// -------------------------
+// Wire up simple UI (paste + button)
+// -------------------------
 window.addEventListener("DOMContentLoaded", () => {
-    render();
+  render();
+
+  const btn = $("scanBtn");
+  const inp = $("scanInput");
+
+  if (btn && inp) {
+    btn.addEventListener("click", () => onScan(inp.value));
+  }
+
+  // opcionális: ha van scannered, hívd ezt:
+  window.onMerchantQrScanned = onScan;
 });

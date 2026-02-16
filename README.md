@@ -1,170 +1,101 @@
-# VFA-MVP  
+# VFA-MVP
 **Virtual Flow Agreement – Minimum Viable Prototype**
 
-A VFA-MVP egy kísérleti Identity Wallet / Virtual Bodyguard koncepció működő prototípusa.  
-Célja egy visszavonható, időkorlátos (TTL) és aláírt digitális token rendszer bemutatása QR-alapú adatmegosztással.
+Ez a repo egy kísérleti **Identity Wallet / Virtual Bodyguard** koncepció működő prototípusa.
+Cél: egy **QR-alapú kézfogás (handshake)** bemutatása, ahol a *Wallet* jóváhagyása után egy rövid élettartamú, **szerver által HMAC-aláírt “visa token”** jön létre, amit a *Merchant* ellenőriztet.
 
-Ez **nem kész termék**, hanem egy technikai és koncepcionális MVP.
-
----
-
-## Fő funkciók
-
-- Lokális Wallet token generálás
-- QR kód előállítás
-- Token visszavonás (revoke)
-- Szerver oldali érvényesség ellenőrzés
-- TTL (lejárati idő)
-- HMAC aláírás a hamisítás ellen
-- Merchant (ellenőrző) oldal QR beolvasással
+> MVP: HMAC = “biztonság jelzése”. Élesben javasolt aszimmetrikus (pl. ECDSA) modell.
 
 ---
 
-## Architektúra (MVP)
+## Fő flow (Handshake)
 
-Wallet (Browser / PWA)   
-↓ QR   
-Merchant (Browser / Camera)   
-↓ API check   
-Flask Backend + SQLite
+**1) Merchant → Request (QR)**
+- Merchant meghívja: `POST /handshake/request`
+- Visszakap egy `qrPayload` JSON-t → ezt QR-ként mutatja a walletnek
 
-### Wallet oldal
-- Token létrehozás
-- QR generálás
-- Visszavonás
-- Lokális tárolás (localStorage)
+**2) Wallet → Accept / Reject**
+- Wallet beolvassa a `qrPayload`-ot, megmutatja a kért scope-ot
+- Wallet meghívja: `POST /handshake/accept` (`ACCEPT` vagy `REJECT`)
+- ACCEPT esetén visszakapja a **`visaToken`**-t → ezt QR-ként mutatja a merchantnak
 
-### Merchant oldal
-- QR beolvasás
-- Payload ellenőrzés
-- API kérés a szerverhez
-
-### Backend
-- Flask REST API
-- SQLite adatbázis
-- Token regisztráció
-- Revoke kezelés
-- TTL + HMAC validáció
+**3) Merchant → Verify**
+- Merchant beolvassa a `visaToken`-t
+- Merchant meghívja: `POST /handshake/verify`
+- Szerver ellenőrzi: HMAC aláírás + TTL + DB-nyilvántartás
 
 ---
 
-## Token Payload (QR)
+## Endpointok
 
+### `POST /handshake/request`
+Bemenet:
 ```json
-{
-  "v": 1,
-  "tokenId": "uuid",
-  "iat": 1730000000000,
-  "exp": 1730000300000,
-  "sig": "base64url"
-}
-````
+{ "merchantId": "lidl_001", "scope": ["age_over_18","loyalty_id"], "ttlSec": 60 }
+```
+
+Kimenet (részlet):
+```json
+{ "ok": true, "qrPayload": { "t":"vfa_hs_req", "requestId":"...", "merchantId":"...", "expMs": 123, "scope":[...] } }
+```
+
+### `POST /handshake/accept`
+Bemenet:
+```json
+{ "requestId": "...", "decision": "ACCEPT" }
+```
+
+Kimenet (ACCEPT):
+```json
+{ "ok": true, "visaToken": "payload_b64.sig_b64", "expMs": 123 }
+```
+
+### `POST /handshake/verify`
+Bemenet:
+```json
+{ "visaToken": "..." }
+```
+
+Kimenet:
+```json
+{ "ok": true, "valid": true, "payload": { "merchantId":"...", "scopeHash":"...", "exp": 123, ... } }
+```
 
 ---
 
-## Telepítés – Backend
+## Frontend
 
-### Követelmények
+- `merchant.html` + `js/merchant.js`:
+  - új handshake request QR generálás
+  - visa token ellenőrzés (verify)
+- `wallet.html` + `js/wallet.js`:
+  - merchant request QR (payload) beolvasás (MVP-ben paste)
+  - ACCEPT/REJECT
+  - visa token QR megjelenítés
 
-* Python 3.10+
-* pip
+---
 
-### Lépések
+## Backend (Flask + SQLite)
 
+### Futtatás
 ```bash
+cd wallet_mvp_backend
 python3 -m venv .venv
 source .venv/bin/activate
 pip install flask flask-cors
-export WALLET_HMAC_SECRET="valami_hosszabb_titok"
+export WALLET_HMAC_SECRET="CHANGE_ME_DEV_SECRET"
 python server.py
 ```
 
-Backend alapértelmezett port: `5000`
+Alapértelmezett: `http://localhost:5000`
 
-Egészség ellenőrzés:
-
-```
-http://localhost:5000/health
-```
-
----
-
-## Frontend futtatás
-
-Nincs build rendszer.
-Egyszerűen nyisd meg:
-
-```
-wallet.html
-merchant.html
-```
-
-Fejlesztéshez ajánlott egy lokális HTTP szerver:
-
-```bash
-python -m http.server
-```
+### Adatbázis
+A `wallet.db` automatikusan létrejön. Táblák:
+- `handshake_requests`
+- `visas`
 
 ---
 
-## Biztonsági megjegyzések (MVP)
-
-Ez a projekt **demó és prototípus célú**.
-
-Jelenlegi korlátok:
-
-* Közös titok (HMAC) a kliensben
-* Nincs HTTPS
-* Nincs eszköz-szintű védelem
-* Nincs kulcsrotáció
-* Nincs rate limit
-
-Tervezett fejlesztések:
-
-* Aszimmetrikus aláírás (ECDSA)
-* Public key infrastruktúra
-* Scope / jogosultsági szintek
-* Kulcsrotáció
-* HTTPS kötelező
-* Több eszköz szinkron
-
----
-
-## Lehetséges Use Case-ek
-
-* Digitális hűségkártya
-* Beléptető token
-* Kedvezmény igazolás
-* Rövid életű azonosítás
-* Adatmegosztási “vízum” modell
-
----
-
-## Projekt státusz
-
-**MVP – Aktív prototípus**
-Nem production ready.
-
----
-
-## License
-
-Apache License 2.0
-Lásd: `LICENSE`
-
----
-
-## Cél
-
-A projekt célja egy olyan koncepció bemutatása, ahol:
-
-* az adatmegosztás visszavonható
-* a tokenek időkorlátosak
-* a felhasználó kontrollálja a jogosultságot
-* a rendszer egyszerűen demózható
-
----
-
-## Megjegyzés
-
-A VFA-MVP oktatási, kísérleti és koncepcionális célokra készült.
+## Legacy (opcionális)
+A repóban megmaradhat a korábbi `/token`, `/revoke`, `/check` demo (közös titkos HMAC-sig a kliens oldalon),
+de a **handshake flow** célja pont az, hogy a titok **ne** kerüljön a wallet kliensbe.

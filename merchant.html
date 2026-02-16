@@ -1,23 +1,31 @@
 <!doctype html>
 <html lang="hu">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Merchant – QR ellenőrzés</title>
-  <link rel="stylesheet" href="css/merchant.css">
-  <!-- QR olvasó lib (kamera) -->
-  <script src="static/html5-qrcode.min.js"></script>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Merchant - QR ellenőrzés</title>
+    <link rel="stylesheet" href="css/merchant.css">
+    <!-- QR létrehozás -->
+    <script src="static/qrious.min.js"></script>
+    <!-- QR olvasó lib (kamera) -->
+    <script src="static/html5-qrcode.min.js"></script>
 </head>
 <body>
-  <h2>Merchant - QR ellenőrzés</h2>
 
-  <button id="rescanBtn" disabled>Új beolvasás</button>
+    <button id="btnNewRequest">Új kérés (QR)</button>
+    <br><br>
+    <canvas id="requestCanvas"></canvas>
+    <br>
+    <textarea id="requestJson" rows="5" style="width:100%" readonly></textarea>
+    
+    <hr>
+    
+    <textarea id="visaInput" rows="3" style="width:100%" placeholder="Ide illeszd be / szkenneld a visaToken-t..."></textarea>
+    <button id="btnVerify">Visa ellenőrzés</button>
+    
+    <div id="merchantView"></div>
 
-  <div id="reader"></div>
+    <script src="js/merchant.js"></script>
 
-  <div id="result"></div>
-
-<script src="js/merchant.js">
-</script>
 </body>
 </html>
