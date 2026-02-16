@@ -17,7 +17,7 @@
 const API_BASE = "http://localhost:5000"; // change if needed
 
 // --- Config (MVP) ---
-const MERCHANT_ID = "lidl_001"; // set per merchant
+const MERCHANT_ID = "Merch_001"; // set per merchant
 const DEFAULT_SCOPE = ["age_over_18", "loyalty_id"]; // what you ask from the wallet
 const DEFAULT_TTL_SEC = 60; // request lifetime
 
@@ -166,3 +166,11 @@ window.addEventListener("DOMContentLoaded", () => {
   // Auto-create a request on load (nice for demos)
   newRequest().catch(console.warn);
 });
+
+new Html5Qrcode("reader").start(
+  { facingMode: "environment" },
+  { fps: 10, qrbox: 200 },
+  (decodedText) => {
+    document.getElementById("visaInput").value = decodedText;
+  }
+);

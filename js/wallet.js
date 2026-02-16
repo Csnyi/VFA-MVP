@@ -166,6 +166,18 @@ function renderVisaQr(visaToken) {
     background: "#ffffff",
     foreground: "#000000"
   });
+  
+  const ta = document.getElementById("visaTokenText");
+  if (ta) ta.value = visaToken;
+
+  const btn = document.getElementById("copyVisaBtn");
+  if (btn) {
+    btn.onclick = async () => {
+      await navigator.clipboard.writeText(visaToken);
+      alert("Visa token másolva!");
+    };
+  }
+
 }
 
 // -------------------------
