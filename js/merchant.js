@@ -10,7 +10,7 @@
 // - requestCanvas (canvas)   : shows merchant request QR
 // - requestJson  (textarea)  : shows the JSON that is encoded in QR (debug/copy)
 // - btnNewRequest (button)   : create new request
-// - visaInput (textarea/input): paste scanned visaToken ???
+// - visaInput (textarea/input): paste scanned visaToken
 // - btnVerify (button)       : verify visaToken
 // - merchantView (div)       : status/output
 
