@@ -14,7 +14,7 @@
 // - btnVerify (button)       : verify visaToken
 // - merchantView (div)       : status/output
 
-const API_BASE = "http://localhost:5000"; // change if needed
+const API_BASE = "http://localhost:5050"; // change if needed
 
 // --- Config (MVP) ---
 const MERCHANT_ID = "Merch_001"; // set per merchant

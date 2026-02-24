@@ -1,5 +1,5 @@
 // js/wallet.js
-const API_BASE = "http://localhost:5000"; // állítsd be ha nem localhost
+const API_BASE = "http://localhost:5050"; // állítsd be ha nem localhost
 
 // -------------------------
 // Minimal DOM helpers
