@@ -33,7 +33,7 @@ This repo is intentionally small and easy to understand. It is a **reference MVP
 ### 1) Run the server
 
 ```bash
-python -m venv .venv
+python3 -m venv .venv
 source .venv/bin/activate
 pip install flask flask-cors
 export WALLET_HMAC_SECRET="CHANGE_ME_DEV_SECRET"
@@ -53,16 +53,11 @@ curl http://localhost:5050/health
 Use any static server. For example:
 
 ```bash
-python -m http.server 8000
+python3 -m http.server 8000
 ```
 
 Open in browser:
 
-- Merchant page (your local HTML that loads `js/merchant.js`)
-- Wallet page (your local HTML that loads `js/wallet.js`)
-
-> Note: This repo assumes you already have minimal HTML pages with the required element IDs.  
-> If you want, I can generate a `demo/merchant.html` + `demo/wallet.html` pair too.
 
 ---
 
