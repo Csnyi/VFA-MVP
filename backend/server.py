@@ -82,7 +82,7 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 
 
-DB_PATH = os.environ.get("WALLET_DB", "wallet.db")
+DB_PATH = os.environ.get("WALLET_DB", "backend/wallet.db")
 
 # IMPORTANT: Good for MVP, but do not commit a real secret to a public repo.
 HMAC_SECRET = os.environ.get("WALLET_HMAC_SECRET", "CHANGE_ME_DEV_SECRET").encode("utf-8")

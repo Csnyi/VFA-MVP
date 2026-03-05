@@ -37,7 +37,7 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install flask flask-cors
 export WALLET_HMAC_SECRET="CHANGE_ME_DEV_SECRET"
-python server.py
+python backend/server.py
 ```
 
 Server runs on: `http://localhost:5050`
@@ -58,6 +58,10 @@ python3 -m http.server 8000
 
 Open in browser:
 
+```
+http://localhost:8000/wallet/wallet.html
+http://localhost:8000/merchant/merchant.html
+```
 
 ---
 
@@ -98,7 +102,7 @@ This demo intentionally keeps security simple:
 - no rate limiting
 - no key rotation
 
-See `SECURITY.md` for details and recommended production hardening.
+See [SECURITY.md](docs/SECURITY.md "SECURITY.md") for details and recommended production hardening.
 
 ---
 

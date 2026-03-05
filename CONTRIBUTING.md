@@ -17,7 +17,7 @@ This project values:
 ## What to work on
 
 Good contribution areas:
-- better demo HTML pages (`demo/wallet.html`, `demo/merchant.html`)
+- better demo HTML pages (`wallet/wallet.html`, `merchant/merchant.html`)
 - documentation improvements (README/ARCHITECTURE/SECURITY)
 - unit tests for token parsing/signing
 - adding optional replay protection (feature-flagged)
@@ -37,7 +37,7 @@ python -m venv .venv
 source .venv/bin/activate
 pip install flask flask-cors
 export WALLET_HMAC_SECRET="CHANGE_ME_DEV_SECRET"
-python server.py
+python backend/server.py
 ```
 
 ### Static client
