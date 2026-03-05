@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="hu">
+<html lang="en">
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>Merchant - QR ellenőrzés</title>
+    <title>Merchant - QR check</title>
     <link rel="stylesheet" href="css/merchant.css">
     <!-- QR létrehozás -->
     <script src="static/qrious.min.js"></script>
@@ -11,15 +11,16 @@
     <script src="static/html5-qrcode.min.js"></script>
 </head>
 <body>
-
-    <button id="btnNewRequest">Új kérés (QR)</button>
+    <h2>Merchant - request & QR check</h2>
+    
+    <button id="btnNewRequest">New request (QR)</button>
     <br><br>
     <canvas id="requestCanvas"></canvas>
     <br>
     <textarea id="requestJson" rows="5" style="width:100%" readonly></textarea>
     <hr>
-    <textarea id="visaInput" rows="3" style="width:100%" placeholder="Ide illeszd be / szkenneld a visaToken-t..."></textarea>
-    <button id="btnVerify">Visa ellenőrzés</button>
+    <textarea id="visaInput" rows="3" style="width:100%" placeholder="Insert / scan visaToken here..."></textarea>
+    <button id="btnVerify">Visa check</button>
     <div id="merchantView"></div>
     <hr>
     <div id="reader"></div>

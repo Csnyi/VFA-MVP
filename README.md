@@ -1,101 +1,112 @@
-# VFA-MVP
-**Virtual Flow Agreement – Minimum Viable Prototype**
+# VFA Handshake MVP (Wallet ↔ Merchant ↔ Server)
 
-Ez a repo egy kísérleti **Identity Wallet / Virtual Bodyguard** koncepció működő prototípusa.
-Cél: egy **QR-alapú kézfogás (handshake)** bemutatása, ahol a *Wallet* jóváhagyása után egy rövid élettartamú, **szerver által HMAC-aláírt “visa token”** jön létre, amit a *Merchant* ellenőriztet.
+A minimal, end-to-end demo of the **VFA Handshake** concept:
 
-> MVP: HMAC = “biztonság jelzése”. Élesben javasolt aszimmetrikus (pl. ECDSA) modell.
+1) **Merchant** creates a handshake request (scope + TTL)  
+2) **Wallet** scans the request and the user accepts/rejects  
+3) **Server** issues a short-lived signed **visa token** on ACCEPT  
+4) **Merchant** verifies the visa token via the server
 
----
-
-## Fő flow (Handshake)
-
-**1) Merchant → Request (QR)**
-- Merchant meghívja: `POST /handshake/request`
-- Visszakap egy `qrPayload` JSON-t → ezt QR-ként mutatja a walletnek
-
-**2) Wallet → Accept / Reject**
-- Wallet beolvassa a `qrPayload`-ot, megmutatja a kért scope-ot
-- Wallet meghívja: `POST /handshake/accept` (`ACCEPT` vagy `REJECT`)
-- ACCEPT esetén visszakapja a **`visaToken`**-t → ezt QR-ként mutatja a merchantnak
-
-**3) Merchant → Verify**
-- Merchant beolvassa a `visaToken`-t
-- Merchant meghívja: `POST /handshake/verify`
-- Szerver ellenőrzi: HMAC aláírás + TTL + DB-nyilvántartás
+This repo is intentionally small and easy to understand. It is a **reference MVP**, not production software.
 
 ---
 
-## Endpointok
+## Components
 
-### `POST /handshake/request`
-Bemenet:
-```json
-{ "merchantId": "lidl_001", "scope": ["age_over_18","loyalty_id"], "ttlSec": 60 }
-```
-
-Kimenet (részlet):
-```json
-{ "ok": true, "qrPayload": { "t":"vfa_hs_req", "requestId":"...", "merchantId":"...", "expMs": 123, "scope":[...] } }
-```
-
-### `POST /handshake/accept`
-Bemenet:
-```json
-{ "requestId": "...", "decision": "ACCEPT" }
-```
-
-Kimenet (ACCEPT):
-```json
-{ "ok": true, "visaToken": "payload_b64.sig_b64", "expMs": 123 }
-```
-
-### `POST /handshake/verify`
-Bemenet:
-```json
-{ "visaToken": "..." }
-```
-
-Kimenet:
-```json
-{ "ok": true, "valid": true, "payload": { "merchantId":"...", "scopeHash":"...", "exp": 123, ... } }
-```
+- `server.py` — Flask + SQLite backend for:
+  - handshake request creation
+  - accept/reject decision handling
+  - visa token issuing & verification
+- `js/wallet.js` — demo wallet UI:
+  - scans/pastes merchant request QR payload
+  - sends ACCEPT/REJECT
+  - shows visa token as QR
+- `js/merchant.js` — demo merchant UI:
+  - creates request and shows QR
+  - scans/pastes visa token
+  - verifies visa token
 
 ---
 
-## Frontend
+## Quick start
 
-- `merchant.html` + `js/merchant.js`:
-  - új handshake request QR generálás
-  - visa token ellenőrzés (verify)
-- `wallet.html` + `js/wallet.js`:
-  - merchant request QR (payload) beolvasás (MVP-ben paste)
-  - ACCEPT/REJECT
-  - visa token QR megjelenítés
+### 1) Run the server
 
----
-
-## Backend (Flask + SQLite)
-
-### Futtatás
 ```bash
-cd wallet_mvp_backend
-python3 -m venv .venv
+python -m venv .venv
 source .venv/bin/activate
 pip install flask flask-cors
 export WALLET_HMAC_SECRET="CHANGE_ME_DEV_SECRET"
 python server.py
 ```
 
-Alapértelmezett: `http://localhost:5000`
+Server runs on: `http://localhost:5050`
 
-### Adatbázis
-A `wallet.db` automatikusan létrejön. Táblák:
-- `handshake_requests`
-- `visas`
+Health check:
+
+```bash
+curl http://localhost:5050/health
+```
+
+### 2) Serve the static files (wallet + merchant)
+
+Use any static server. For example:
+
+```bash
+python -m http.server 8000
+```
+
+Open in browser:
+
+- Merchant page (your local HTML that loads `js/merchant.js`)
+- Wallet page (your local HTML that loads `js/wallet.js`)
+
+> Note: This repo assumes you already have minimal HTML pages with the required element IDs.  
+> If you want, I can generate a `demo/merchant.html` + `demo/wallet.html` pair too.
 
 ---
 
-## Legacy (opcionális)
-A repóban megmaradhat a korábbi `/token`, `/revoke`, `/check` demo (közös titkos HMAC-sig a kliens oldalon),
-de a **handshake flow** célja pont az, hogy a titok **ne** kerüljön a wallet kliensbe.
+## Demo flow
+
+1) Open Merchant UI → a request is created automatically (or click “New Request”)  
+2) Merchant shows QR → Wallet scans/pastes the QR content  
+3) Wallet shows scope + expiration → user clicks Accept  
+4) Wallet shows visa token QR → Merchant scans/pastes it  
+5) Merchant clicks Verify → server validates token and returns payload
+
+---
+
+## Configuration
+
+### Server
+
+Environment variables:
+
+- `WALLET_DB` (default: `wallet.db`)
+- `WALLET_HMAC_SECRET` (default: `CHANGE_ME_DEV_SECRET`)  
+  **Never commit real secrets to a public repo.**
+
+### Wallet / Merchant
+
+- `API_BASE` in `wallet.js` and `merchant.js` must point to the server (default `http://localhost:5050`)
+- `MERCHANT_ID`, `DEFAULT_SCOPE`, `DEFAULT_TTL_SEC` are in `merchant.js`
+
+---
+
+## MVP limitations (important)
+
+This demo intentionally keeps security simple:
+
+- shared HMAC secret (server-side)
+- no anti-replay protection
+- no device binding / attestation
+- no rate limiting
+- no key rotation
+
+See `SECURITY.md` for details and recommended production hardening.
+
+---
+
+## License
+
+Apache-2.0 — see `LICENSE`.
