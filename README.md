@@ -1,5 +1,9 @@
 # VFA Handshake MVP (Wallet ↔ Merchant ↔ Server)
 
+> A minimal reference implementation of the **VFA Handshake protocol concept**.
+
+![License](https://img.shields.io/badge/license-Apache--2.0-blue)
+
 A minimal, end-to-end demo of the **VFA Handshake** concept:
 
 1) **Merchant** creates a handshake request (scope + TTL)  
@@ -13,18 +17,29 @@ This repo is intentionally small and easy to understand. It is a **reference MVP
 
 ## Components
 
-- `server.py` — Flask + SQLite backend for:
+- `backend/server.py` — Flask + SQLite backend for:
   - handshake request creation
   - accept/reject decision handling
   - visa token issuing & verification
-- `js/wallet.js` — demo wallet UI:
+
+- `wallet/wallet.js` — demo wallet UI:
   - scans/pastes merchant request QR payload
   - sends ACCEPT/REJECT
   - shows visa token as QR
-- `js/merchant.js` — demo merchant UI:
+
+- `merchant/merchant.js` — demo merchant UI:
   - creates request and shows QR
   - scans/pastes visa token
   - verifies visa token
+
+---
+
+## Requirements
+
+- Python 3.10+ (recommended)
+- A modern browser
+- A local static file server (e.g. `python3 -m http.server`)
+- Python packages listed in `requirements.txt`
 
 ---
 
@@ -35,9 +50,12 @@ This repo is intentionally small and easy to understand. It is a **reference MVP
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-pip install flask flask-cors
-export WALLET_HMAC_SECRET="CHANGE_ME_DEV_SECRET"
-python backend/server.py
+pip install -r requirements.txt
+# Copy environment template
+cp .env.example .env
+# Edit the secret
+nano .env
+python3 backend/server.py
 ```
 
 Server runs on: `http://localhost:5050`
@@ -68,9 +86,9 @@ http://localhost:8000/merchant/merchant.html
 ## Demo flow
 
 1) Open Merchant UI → a request is created automatically (or click “New Request”)  
-2) Merchant shows QR → Wallet scans/pastes the QR content  
+2) Merchant shows the request QR → Wallet scans or pastes the QR content 
 3) Wallet shows scope + expiration → user clicks Accept  
-4) Wallet shows visa token QR → Merchant scans/pastes it  
+4) Wallet shows visa token QR → Merchant scans or pastes it  
 5) Merchant clicks Verify → server validates token and returns payload
 
 ---
@@ -81,8 +99,8 @@ http://localhost:8000/merchant/merchant.html
 
 Environment variables:
 
-- `WALLET_DB` (default: `wallet.db`)
-- `WALLET_HMAC_SECRET` (default: `CHANGE_ME_DEV_SECRET`)  
+- `WALLET_DB` (default: `backend/wallet.db`)
+- `WALLET_HMAC_SECRET` (required)  
   **Never commit real secrets to a public repo.**
 
 ### Wallet / Merchant
@@ -101,6 +119,8 @@ This demo intentionally keeps security simple:
 - no device binding / attestation
 - no rate limiting
 - no key rotation
+- CORS is intentionally open in the demo server to simplify local development.
+  Production deployments should restrict allowed origins.
 
 See [SECURITY.md](docs/SECURITY.md "SECURITY.md") for details and recommended production hardening.
 

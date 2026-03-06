@@ -1,3 +1,12 @@
 .venv/
 **/.venv/
 wallet.db
+# Python
+__pycache__/
+*.pyc
+# OS
+.DS_Store
+# SQLite for later
+*.sqlite3
+# Local env
+.env

@@ -33,17 +33,20 @@ Please avoid:
 ### Python server
 
 ```bash
-python -m venv .venv
+python3 -m venv .venv
 source .venv/bin/activate
-pip install flask flask-cors
-export WALLET_HMAC_SECRET="CHANGE_ME_DEV_SECRET"
-python backend/server.py
+pip install -r requirements.txt
+# Copy environment template
+cp .env.example .env
+# Edit the secret
+nano .env
+python3 backend/server.py
 ```
 
 ### Static client
 
 ```bash
-python -m http.server 8000
+python3 -m http.server 8000
 ```
 
 ## Code style

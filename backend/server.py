@@ -77,19 +77,26 @@ import sqlite3
 import json
 import secrets
 from datetime import datetime, timezone
-
 from flask import Flask, request, jsonify
 from flask_cors import CORS
+from dotenv import load_dotenv
 
+load_dotenv()
 
 DB_PATH = os.environ.get("WALLET_DB", "backend/wallet.db")
 
-# IMPORTANT: Good for MVP, but do not commit a real secret to a public repo.
-HMAC_SECRET = os.environ.get("WALLET_HMAC_SECRET", "CHANGE_ME_DEV_SECRET").encode("utf-8")
+HMAC_SECRET_RAW = os.environ.get("WALLET_HMAC_SECRET", "").strip()
+
+if not HMAC_SECRET_RAW or HMAC_SECRET_RAW == "CHANGE_ME_DEV_SECRET":
+    raise RuntimeError(
+        "WALLET_HMAC_SECRET must be set to a non-default value. "
+        "Copy .env.example to .env and update the secret."
+    )
+
+HMAC_SECRET = HMAC_SECRET_RAW.encode("utf-8")
 
 app = Flask(__name__)
 CORS(app)
-
 
 # ---------------------------------------------------------------------
 # DB helpers

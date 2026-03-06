@@ -2,23 +2,24 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Mini Wallet MVP</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Wallet - Handshake MVP</title>
     <link rel="stylesheet" href="wallet.css">
     <!-- QR creation -->
     <script src="../static/qrious.min.js"></script>
 </head>
 <body>
 
-    <h2>Mini Identity Wallet - MVP</h2>
+    <h2>Wallet - Handshake MVP</h2>
 
-    <textarea rows="5" style="width:100%" id="scanInput" placeholder="Paste the merchant qrPayload JSON..."></textarea>
+    <textarea rows="5" style="width:100%" id="scanInput" placeholder="Paste the merchant QR payload (JSON)..."></textarea>
     <button id="scanBtn">Scan</button>
     
     <div id="walletView"></div>
     <canvas id="visaCanvas" width="200" height="200"></canvas><br>
     <textarea rows="5" style="width:100%" id="visaTokenText" readonly></textarea>
     <hr>
-    <button id="copyVisaBtn">Visa token copy</button>
+    <button id="copyVisaBtn">Copy visa token</button>
 
     <script src="wallet.js"></script>
 
