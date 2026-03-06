@@ -15,11 +15,11 @@ This repo is intentionally small and easy to understand. It is a **reference MVP
 
 ---
 
-## Related Project
+## Repositories
 
-Concept and architecture:
-
-➡ https://github.com/Csnyi/VFA-Lab
+- **VFA-MVP** – wallet / merchant reference implementation 
+- **VFA-Lab** – architecture, research, and gateway demo → https://github.com/Csnyi/VFA-Lab
+- **VFA-Spec** - protocol specification → https://github.com/Csnyi/VFA-Spec
 
 ---
 
