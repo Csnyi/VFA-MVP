@@ -15,6 +15,14 @@ This repo is intentionally small and easy to understand. It is a **reference MVP
 
 ---
 
+## Related Project
+
+Concept and architecture:
+
+➡ https://github.com/Csnyi/VFA-Lab
+
+---
+
 ## Components
 
 - `backend/server.py` — Flask + SQLite backend for:
