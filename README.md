@@ -19,7 +19,7 @@ This repo is intentionally small and easy to understand. It is a **reference MVP
 
 Implementation and demonstration projects:
 
-- **VFA-MVP** – wallet / merchant reference implementation 
+- **VFA-MVP** – this repository: wallet / merchant reference implementation 
 - **VFA-Lab** – architecture, research, and gateway demo → https://github.com/Csnyi/VFA-Lab
 - **VFA-cloud-PoC** — cloud operation PoC (deployment scenario) → https://github.com/Csnyi/VFA-cloud-PoC
 - **VFA-Spec** - protocol specification → https://github.com/Csnyi/VFA-Spec
